@@ -1,138 +1,243 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JavaScriptでルーレットを作る方法</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-        }
-        #roulette {
-            margin: 50px auto;
-            position: relative;
-        }
-        #pointer {
-            width: 0;
-            height: 0;
-            border-left: 20px solid transparent;
-            border-right: 20px solid transparent;
-            border-top: 40px solid red; /* 矢印を下向きに変更 */
-            position: absolute;
-            top: -40px; /* キャンバスの上に表示 */
-            left: calc(50% - 20px); /* 中央に配置 */
-        }
-        #spin {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            font-size: 16px;
-            cursor: pointer;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夕飯ルーレット！</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #ecded6;
+        }
+
+        #roulette {
+            position: relative;
+            margin: 20px auto;
+        }
+
+        #pointer {
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid rgb(255, 70, 70);
+            position: absolute;
+            z-index: 10;
+            top: -40px; 
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .button-container {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+        button {
+            padding: 20px 40px; 
+            font-size: 32px;    
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            color: rgb(255, 255, 255);
+            transition: background-color 0.3s;
+        }
+
+        #start {
+            background-color: #28a745;
+        }
+        #start:disabled {
+            background-color: #94d3a2;
+            cursor: not-allowed;
+        }
+
+        #stop {
+            background-color: #dc3545;
+        }
+        #stop:disabled {
+            background-color: #e49199;
+            cursor: not-allowed;
+        }
+
+        #result-area {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        #result {
+            font-size: 48px; 
+            font-weight: bold;
+            margin: 0;
+            min-height: 1.2em; 
+        }
+
+        #search-link {
+            margin-top: 10px;
+            font-size: 24px; 
+            display: block;
+        }
+        
+        #search-link a {
+            color: #007bff;
+            text-decoration: none;
+            border-bottom: 1px solid #007bff;
+        }
+        
+        #search-link a:hover {
+            opacity: 0.7;
+        }
+    </style>
 </head>
 <body>
 
-    <h1>JavaScriptでルーレットを作る方法</h1>
+    <h1>夕飯ルーレット！</h1>
 
-    <div id="roulette">
-        <div id="pointer"></div>
-        <canvas id="canvas"></canvas>
-    </div>
+    <div id="roulette">
+        <div id="pointer"></div>
+        <canvas id="canvas"></canvas>
+    </div>
 
-    <button id="spin">スピンする</button>
+    <div class="button-container">
+        <button id="start">スタート</button>
+        <button id="stop" disabled>ストップ</button>
+    </div>
 
-    <p id="result"></p>
+    <div id="result-area">
+        <p id="result"></p>
+        <div id="search-link"></div>
+    </div>
 
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const pointer = document.getElementById('pointer');
-        const sectors = ["赤", "青", "緑", "黄色", "ピンク", "紫"];
-        const colors = ["#FF0000", "#0000FF", "#00FF00", "#FFFF00", "#FFC0CB", "#800080"];
-        let angle = 0;
-        let canvasSize = Math.min(window.innerWidth, window.innerHeight) * 0.8; // キャンバスのサイズを端末に合わせる
-        canvas.width = canvasSize;
-        canvas.height = canvasSize;
-        const sectorAngle = 2 * Math.PI / sectors.length;
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const pointer = document.getElementById('pointer');
+        const sectors = ["カレー", "ハンバーグ", "唐揚げ", "肉じゃが", "とんかつ", "生姜焼き"];
+        const colors = ["#B28f8f", "#8C9B9B", "#94A89A", "#B5AA88", "#A38C9B", "#9188A3"];
+        
+        let angle = 0;
+        let canvasSize = 0;
+        const sectorAngle = 2 * Math.PI / sectors.length;
 
-        // キャンバスサイズに合わせてポインタの位置を調整
-        pointer.style.top = `${-canvasSize * 0.1}px`; // キャンバスの上に表示
-        pointer.style.left = `calc(50% - ${canvasSize * 0.05}px)`; // 中央に配置
+        let isSpinning = false;
+        let isStopping = false;
+        let currentVelocity = 0;
+        let animationId = null;
 
-        // ルーレットを描画
-        function drawRoulette() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // 前の描画をクリア
-            ctx.save(); // 現在の状態を保存
-            ctx.translate(canvasSize / 2, canvasSize / 2); // キャンバスの中心に移動
-            ctx.rotate(angle); // キャンバス全体を回転
+        function init() {
+            resizeCanvas();
+            drawRoulette();
+        }
 
-            sectors.forEach((sector, index) => {
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.arc(0, 0, canvasSize / 2, index * sectorAngle, (index + 1) * sectorAngle);
-                ctx.fillStyle = colors[index];
-                ctx.fill();
-                ctx.closePath();
+        function resizeCanvas() {
+            canvasSize = Math.min(window.innerWidth, window.innerHeight) * 0.6; 
+            canvas.width = canvasSize;
+            canvas.height = canvasSize;
 
-                // テキストを描く
-                ctx.save();
-                ctx.rotate((index + 0.5) * sectorAngle);
-                ctx.textAlign = "right";
-                ctx.font = `${canvasSize * 0.05}px Arial`; // サイズに応じてフォントサイズ変更
-                ctx.fillStyle = "#FFFFFF";
-                ctx.fillText(sector, canvasSize * 0.45, 0); // テキストをキャンバスサイズに合わせて配置
-                ctx.restore();
-            });
+            pointer.style.top = `${-canvasSize * 0.05}px`; 
+            pointer.style.left = `50%`; 
+        }
 
-            ctx.restore(); // 状態を元に戻す
-        }
+        function drawRoulette() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvasSize / 2, canvasSize / 2);
+            ctx.rotate(angle);
 
-        // スピンのアニメーション
-        function spinRoulette() {
-            const spinButton = document.getElementById('spin');
-            spinButton.disabled = true;
-            const targetAngle = Math.random() * 2 * Math.PI + 10 * Math.PI; // ランダムな回転
-            const spinDuration = 3000; // 3秒でスピン
-            const startTime = performance.now();
+            sectors.forEach((sector, index) => {
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.arc(0, 0, canvasSize / 2, index * sectorAngle, (index + 1) * sectorAngle);
+                ctx.fillStyle = colors[index];
+                ctx.fill();
+                ctx.closePath();
 
-            function animate(time) {
-                const elapsed = time - startTime;
-                if (elapsed < spinDuration) {
-                    angle = (targetAngle * (elapsed / spinDuration)) % (2 * Math.PI);
-                    drawRoulette();
-                    requestAnimationFrame(animate);
-                } else {
-                    angle = targetAngle % (2 * Math.PI);
+                ctx.save();
+                ctx.rotate((index + 0.5) * sectorAngle);
+                ctx.textAlign = "right";
+                ctx.font = `${canvasSize * 0.08}px Arial`; 
+                ctx.fillStyle = "#FFFFFF";
+                ctx.fillText(sector, canvasSize * 0.45, 10); 
+                ctx.restore();
+            });
 
-                    // ルーレットの停止位置に基づいて結果を計算
-                    const correctedAngle = (angle + Math.PI / 2) % (2 * Math.PI); // 矢印は上にあるため、90度補正
-                    const sectorIndex = Math.floor(correctedAngle / sectorAngle) % sectors.length;
-                    document.getElementById('result').textContent = `結果: ${sectors[sectors.length - 1 - sectorIndex]}`;
-                    spinButton.disabled = false;
-                }
-            }
+            ctx.restore();
+        }
 
-            requestAnimationFrame(animate);
-        }
+        document.getElementById('start').addEventListener('click', () => {
+            if (isSpinning) return;
+            
+            isSpinning = true;
+            isStopping = false;
+            currentVelocity = 0.08; 
+            
+            document.getElementById('start').disabled = true;
+            document.getElementById('stop').disabled = false;
+            document.getElementById('result').textContent = ""; 
+            document.getElementById('search-link').innerHTML = ""; 
 
-        // 画面サイズ変更時にキャンバスのサイズを再調整
-        window.addEventListener('resize', () => {
-            canvasSize = Math.min(window.innerWidth, window.innerHeight) * 0.8;
-            canvas.width = canvasSize;
-            canvas.height = canvasSize;
-            pointer.style.top = `${-canvasSize * 0.1}px`; // キャンバスの上に表示
-            pointer.style.left = `calc(50% - ${canvasSize * 0.05}px)`; // 中央に配置
-            drawRoulette(); // 再描画
-        });
+            runAnimation();
+        });
 
-        document.getElementById('spin').addEventListener('click', spinRoulette);
+        document.getElementById('stop').addEventListener('click', () => {
+            if (!isSpinning || isStopping) return;
+            isStopping = true;
+            document.getElementById('stop').disabled = true;
+        });
 
-        drawRoulette();
-    </script>
+        function runAnimation() {
+            if (!isSpinning) return;
+
+            if (isStopping) {
+                currentVelocity *= 0.96; 
+                
+                if (currentVelocity < 0.002) {
+                    currentVelocity = 0;
+                    isSpinning = false;
+                    isStopping = false;
+                    cancelAnimationFrame(animationId);
+                    showResult();
+                    document.getElementById('start').disabled = false;
+                    return;
+                }
+            }
+
+            angle += currentVelocity;
+            angle %= 2 * Math.PI; 
+            drawRoulette();
+            animationId = requestAnimationFrame(runAnimation);
+        }
+
+        function showResult() {
+            const correctedAngle = (angle + Math.PI / 2) % (2 * Math.PI);
+            const sectorIndex = Math.floor(correctedAngle / sectorAngle) % sectors.length;
+            
+            const resultWord = sectors[sectors.length - 1 - sectorIndex];
+
+            document.getElementById('result').textContent = `結果: ${resultWord}`;
+
+            const linkDiv = document.getElementById('search-link');
+            const link = document.createElement('a');
+            link.href = `https://www.google.com/search?q=${encodeURIComponent(resultWord)} レシピ`;
+            link.target = "_blank"; 
+            link.textContent = `"${resultWord}" レシピ`;
+            linkDiv.appendChild(link);
+        }
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            drawRoulette();
+        });
+
+        init();
+    </script>
 
 </body>
 </html>
